@@ -14,12 +14,24 @@ import androidx.compose.material3.NavigationBarItemDefaults
 import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
+import android.Manifest
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.compose.foundation.layout.padding
+import androidx.compose.material3.AlertDialog
+import androidx.compose.material3.Button
+import androidx.compose.material3.TextButton
+import androidx.compose.runtime.DisposableEffect
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import androidx.lifecycle.Lifecycle
+import androidx.lifecycle.LifecycleEventObserver
+import androidx.lifecycle.compose.LocalLifecycleOwner
+import com.metalens.app.wakeword.WakeWordPermissions
 import com.metalens.app.wakeword.WakeWordService
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
@@ -173,6 +185,47 @@ private fun MetaLensNavHost(
             val wearablesViewModel: WearablesViewModel = viewModel(activity)
             val wearablesUiState by wearablesViewModel.uiState.collectAsStateWithLifecycle()
             var wakeWordActive by remember { mutableStateOf(false) }
+
+            // Trigger the next missing permission — either a runtime prompt (mic)
+            // or a deep-link to Settings (overlay / accessibility).
+            var pendingStep by remember { mutableStateOf<WakeWordPermissions.Missing?>(null) }
+            val micPermission = rememberLauncherForActivityResult(
+                ActivityResultContracts.RequestPermission(),
+            ) { granted ->
+                if (granted) advanceOrStart(activity, onStart = {
+                    WakeWordService.start(activity); wakeWordActive = true
+                }, onPending = { pendingStep = it })
+            }
+
+            // Re-check permissions on every foreground return (so the user coming
+            // back from Settings auto-continues).
+            val lifecycleOwner = LocalLifecycleOwner.current
+            DisposableEffect(lifecycleOwner) {
+                val observer = LifecycleEventObserver { _, event ->
+                    if (event == Lifecycle.Event.ON_RESUME && pendingStep != null) {
+                        advanceOrStart(activity, onStart = {
+                            WakeWordService.start(activity); wakeWordActive = true; pendingStep = null
+                        }, onPending = { pendingStep = it })
+                    }
+                }
+                lifecycleOwner.lifecycle.addObserver(observer)
+                onDispose { lifecycleOwner.lifecycle.removeObserver(observer) }
+            }
+
+            pendingStep?.let { step ->
+                PermissionDialog(
+                    step = step,
+                    onGrant = {
+                        when (step) {
+                            WakeWordPermissions.Missing.Mic -> micPermission.launch(Manifest.permission.RECORD_AUDIO)
+                            WakeWordPermissions.Missing.Overlay -> WakeWordPermissions.openOverlaySettings(activity)
+                            WakeWordPermissions.Missing.Accessibility -> WakeWordPermissions.openAccessibilitySettings(activity)
+                        }
+                    },
+                    onCancel = { pendingStep = null },
+                )
+            }
+
             HomeScreen(
                 modifier = modifier,
                 isGlassesConnected = wearablesUiState.hasActiveDevice,
@@ -187,10 +240,12 @@ private fun MetaLensNavHost(
                 onToggleWakeWord = {
                     if (wakeWordActive) {
                         WakeWordService.stop(activity)
+                        wakeWordActive = false
                     } else {
-                        WakeWordService.start(activity)
+                        advanceOrStart(activity, onStart = {
+                            WakeWordService.start(activity); wakeWordActive = true
+                        }, onPending = { pendingStep = it })
                     }
-                    wakeWordActive = !wakeWordActive
                 },
             )
         }
@@ -242,5 +297,46 @@ private fun MetaLensNavHost(
 @Composable
 private fun MetaLensAppPreview() {
     MetaLensApp()
+}
+
+private fun advanceOrStart(
+    activity: ComponentActivity,
+    onStart: () -> Unit,
+    onPending: (WakeWordPermissions.Missing) -> Unit,
+) {
+    val missing = WakeWordPermissions.missing(activity)
+    if (missing.isEmpty()) onStart() else onPending(missing.first())
+}
+
+@Composable
+private fun PermissionDialog(
+    step: WakeWordPermissions.Missing,
+    onGrant: () -> Unit,
+    onCancel: () -> Unit,
+) {
+    val (title, body, button) = when (step) {
+        WakeWordPermissions.Missing.Mic -> Triple(
+            "Microphone access",
+            "The wake-word detector runs locally on the device's microphone — audio never leaves the phone until you say the trigger word and ChatGPT takes over.",
+            "Grant microphone",
+        )
+        WakeWordPermissions.Missing.Overlay -> Triple(
+            "Display over other apps",
+            "Android blocks apps from launching ChatGPT from the background unless this permission is on. No overlays are actually drawn — it's only here to allow the launch.",
+            "Open Settings",
+        )
+        WakeWordPermissions.Missing.Accessibility -> Triple(
+            "Accessibility: auto-tap voice mode",
+            "After ChatGPT opens, this service taps its Voice Mode button for you. It only runs when com.openai.chatgpt is in the foreground and only clicks one button.",
+            "Open Accessibility",
+        )
+    }
+    AlertDialog(
+        onDismissRequest = onCancel,
+        title = { androidx.compose.material3.Text(title) },
+        text = { androidx.compose.material3.Text(body) },
+        confirmButton = { Button(onClick = onGrant) { androidx.compose.material3.Text(button) } },
+        dismissButton = { TextButton(onClick = onCancel) { androidx.compose.material3.Text("Cancel") } },
+    )
 }
 

@@ -31,15 +31,16 @@ class ChatGPTAccessibilityService : AccessibilityService() {
                 AccessibilityServiceInfo.FLAG_INCLUDE_NOT_IMPORTANT_VIEWS or
                 AccessibilityServiceInfo.FLAG_RETRIEVE_INTERACTIVE_WINDOWS
             notificationTimeout = 80
-            packageNames = arrayOf(CHATGPT_PKG)
+            packageNames = WATCHED_PKGS
         }
         serviceInfo = info
-        Log.i(TAG, "Service connected, watching $CHATGPT_PKG")
+        Log.i(TAG, "Service connected, watching ${WATCHED_PKGS.joinToString()}")
     }
 
     override fun onAccessibilityEvent(event: AccessibilityEvent?) {
         event ?: return
-        if (event.packageName != CHATGPT_PKG) return
+        val pkg = event.packageName?.toString() ?: return
+        if (pkg !in WATCHED_PKGS) return
 
         val now = System.currentTimeMillis()
         if (now - lastTapAtMs < DEBOUNCE_MS) return
@@ -95,8 +96,8 @@ class ChatGPTAccessibilityService : AccessibilityService() {
     }
 
     companion object {
-        private const val TAG = "ChatGPTAxe"
-        private const val CHATGPT_PKG = "com.openai.chatgpt"
+        private const val TAG = "AssistantAxe"
+        private val WATCHED_PKGS = arrayOf("com.openai.chatgpt", "com.anthropic.claude")
         private const val DEBOUNCE_MS = 3000L
 
         private val VOICE_DESC_KEYWORDS = listOf(

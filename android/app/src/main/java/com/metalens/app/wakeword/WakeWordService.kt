@@ -80,7 +80,10 @@ class WakeWordService : LifecycleService() {
         scope = cs
         loopJob = cs.launch {
             try {
-                detector = OpenWakeWordDetector(this@WakeWordService)
+                detector = OpenWakeWordDetector(
+                    this@WakeWordService,
+                    WAKE_WORD_BINDINGS.map { it.modelAsset },
+                )
             } catch (t: Throwable) {
                 Log.e(TAG, "Failed to load wake-word models", t)
                 stopSelf()
@@ -129,17 +132,25 @@ class WakeWordService : LifecycleService() {
                     }
                     readTotal += got
                 }
-                val score = try {
+                val scores = try {
                     detector?.process(chunk)
                 } catch (t: Throwable) {
                     Log.e(TAG, "Detector error", t); null
                 }
-                if (score != null && score > THRESHOLD) {
-                    val now = System.currentTimeMillis()
-                    if (now >= triggerCooldownUntilMs) {
-                        triggerCooldownUntilMs = now + TRIGGER_COOLDOWN_MS
-                        Log.i(TAG, "Wake word fired (score=$score)")
-                        launchChatGpt()
+                if (scores != null) {
+                    var bestIdx = -1
+                    var bestScore = THRESHOLD
+                    for (i in scores.indices) {
+                        if (scores[i] > bestScore) { bestIdx = i; bestScore = scores[i] }
+                    }
+                    if (bestIdx >= 0) {
+                        val now = System.currentTimeMillis()
+                        if (now >= triggerCooldownUntilMs) {
+                            triggerCooldownUntilMs = now + TRIGGER_COOLDOWN_MS
+                            val binding = WAKE_WORD_BINDINGS[bestIdx]
+                            Log.i(TAG, "Wake word fired: ${binding.word} (score=$bestScore) -> ${binding.pkg}")
+                            launchPackage(binding.pkg)
+                        }
                     }
                 }
             }
@@ -163,14 +174,50 @@ class WakeWordService : LifecycleService() {
         scope = null
     }
 
-    private fun launchChatGpt() {
-        val launchIntent = packageManager.getLaunchIntentForPackage(CHATGPT_PKG)
+    private fun launchPackage(pkg: String) {
+        val launchIntent = packageManager.getLaunchIntentForPackage(pkg)
         if (launchIntent == null) {
-            Log.e(TAG, "ChatGPT app not installed ($CHATGPT_PKG)")
+            Log.e(TAG, "App not installed ($pkg)")
             return
         }
-        launchIntent.addFlags(Intent.FLAG_ACTIVITY_NEW_TASK or Intent.FLAG_ACTIVITY_CLEAR_TOP)
-        startActivity(launchIntent)
+        launchIntent.addFlags(
+            Intent.FLAG_ACTIVITY_NEW_TASK or
+                Intent.FLAG_ACTIVITY_CLEAR_TOP or
+                Intent.FLAG_ACTIVITY_RESET_TASK_IF_NEEDED,
+        )
+        try {
+            startActivity(launchIntent)
+        } catch (t: Throwable) {
+            Log.w(TAG, "Direct startActivity failed, falling back to full-screen notification", t)
+            postLaunchNotification(launchIntent)
+        }
+    }
+
+    private fun postLaunchNotification(target: Intent) {
+        val channelId = "wakeword_launch"
+        val nm = getSystemService(Context.NOTIFICATION_SERVICE) as NotificationManager
+        if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.O &&
+            nm.getNotificationChannel(channelId) == null
+        ) {
+            nm.createNotificationChannel(
+                NotificationChannel(channelId, "Wake-word launches", NotificationManager.IMPORTANCE_HIGH)
+            )
+        }
+        val pi = PendingIntent.getActivity(
+            this, 1, target,
+            PendingIntent.FLAG_IMMUTABLE or PendingIntent.FLAG_UPDATE_CURRENT,
+        )
+        val notif = NotificationCompat.Builder(this, channelId)
+            .setContentTitle("Wake word fired")
+            .setContentText("Opening ChatGPT…")
+            .setSmallIcon(R.mipmap.ic_launcher)
+            .setContentIntent(pi)
+            .setFullScreenIntent(pi, true)
+            .setAutoCancel(true)
+            .setPriority(NotificationCompat.PRIORITY_MAX)
+            .setCategory(NotificationCompat.CATEGORY_CALL)
+            .build()
+        nm.notify(99, notif)
     }
 
     private fun startForegroundNotification() {
@@ -190,7 +237,7 @@ class WakeWordService : LifecycleService() {
         )
         val notif: Notification = NotificationCompat.Builder(this, channelId)
             .setContentTitle(getString(R.string.wake_word_status_on))
-            .setContentText("Say \"Hey Jarvis\" to open ChatGPT voice")
+            .setContentText("\"Hey Jarvis\" = ChatGPT   \"Hey Mycroft\" = Claude")
             .setSmallIcon(R.mipmap.ic_launcher)
             .setContentIntent(openApp)
             .setOngoing(true)
@@ -205,12 +252,22 @@ class WakeWordService : LifecycleService() {
     companion object {
         private const val TAG = "WakeWordService"
         private const val NOTIF_ID = 42
-        private const val CHATGPT_PKG = "com.openai.chatgpt"
 
         private const val SAMPLE_RATE = OpenWakeWordDetector.SAMPLE_RATE
         private const val CHUNK_SAMPLES = OpenWakeWordDetector.CHUNK_SAMPLES
         private const val THRESHOLD = 0.5f
         private const val TRIGGER_COOLDOWN_MS = 4000L
+
+        data class WakeBinding(val word: String, val modelAsset: String, val pkg: String)
+
+        // Built-in openWakeWord models -> assistant app.
+        // openWakeWord doesn't ship a "Hey ChatGPT" / "Hey Claude" model, so we
+        // borrow "Hey Jarvis" for ChatGPT and "Hey Mycroft" for Claude until we
+        // train custom ones (~15 min each on a colab GPU).
+        val WAKE_WORD_BINDINGS = listOf(
+            WakeBinding("Hey Jarvis", "hey_jarvis_v0.1.onnx", "com.openai.chatgpt"),
+            WakeBinding("Hey Mycroft", "hey_mycroft_v0.1.onnx", "com.anthropic.claude"),
+        )
 
         fun start(context: Context) {
             context.startForegroundService(Intent(context, WakeWordService::class.java))

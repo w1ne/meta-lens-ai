@@ -7,4 +7,4 @@
     android:description="@string/accessibility_description"
     android:label="@string/accessibility_label"
     android:notificationTimeout="80"
-    android:packageNames="com.openai.chatgpt" />
+    android:packageNames="com.openai.chatgpt,com.anthropic.claude" />
