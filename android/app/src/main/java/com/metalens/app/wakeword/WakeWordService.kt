@@ -24,6 +24,7 @@ import com.metalens.app.settings.AppSettings
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.SupervisorJob
 import kotlinx.coroutines.cancel
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.isActive
@@ -176,6 +177,26 @@ class WakeWordService : LifecycleService() {
     }
 
     private fun launchPackage(pkg: String) {
+        // Kick off an async glasses-photo capture. If it finishes, share the
+        // photo into the target app so the voice conversation has visual
+        // context. If it doesn't (no glasses, timeout), just launch plain.
+        val photoScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
+        photoScope.launch {
+            val photoUri = try {
+                GlassesPhotoCapture.captureToFileProviderUri(this@WakeWordService)
+            } catch (t: Throwable) {
+                Log.w(TAG, "Glasses photo capture failed", t); null
+            }
+            if (photoUri != null) {
+                shareImageToPackage(pkg, photoUri)
+            } else {
+                launchPlain(pkg)
+            }
+            photoScope.cancel()
+        }
+    }
+
+    private fun launchPlain(pkg: String) {
         val launchIntent = packageManager.getLaunchIntentForPackage(pkg)
         if (launchIntent == null) {
             Log.e(TAG, "App not installed ($pkg)")
@@ -191,6 +212,26 @@ class WakeWordService : LifecycleService() {
         } catch (t: Throwable) {
             Log.w(TAG, "Direct startActivity failed, falling back to full-screen notification", t)
             postLaunchNotification(launchIntent)
+        }
+    }
+
+    private fun shareImageToPackage(pkg: String, uri: android.net.Uri) {
+        val send = Intent(Intent.ACTION_SEND).apply {
+            type = "image/jpeg"
+            setPackage(pkg)
+            putExtra(Intent.EXTRA_STREAM, uri)
+            addFlags(
+                Intent.FLAG_ACTIVITY_NEW_TASK or
+                    Intent.FLAG_GRANT_READ_URI_PERMISSION or
+                    Intent.FLAG_ACTIVITY_CLEAR_TOP,
+            )
+        }
+        try {
+            startActivity(send)
+            Log.i(TAG, "Shared glasses photo to $pkg")
+        } catch (t: Throwable) {
+            Log.w(TAG, "Share failed, falling back to plain launch", t)
+            launchPlain(pkg)
         }
     }
 
