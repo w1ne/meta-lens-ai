@@ -27,11 +27,11 @@ android {
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "com.metalens.app"
+        applicationId = "com.metalens.app.chatgpt"
         minSdk = 31
         targetSdk = 34
-        versionCode = 1
-        versionName = "0.2.0"
+        versionCode = 100
+        versionName = "0.12.0-chatgpt-fork"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
         vectorDrawables {
@@ -51,6 +51,11 @@ android {
             "String",
             "OPENAI_MODEL",
             "\"${getBuildProperty("OPENAI_MODEL")}\"",
+        )
+        buildConfigField(
+            "String",
+            "PORCUPINE_ACCESS_KEY",
+            "\"${getBuildProperty("PORCUPINE_ACCESS_KEY")}\"",
         )
     }
 
@@ -107,4 +112,7 @@ dependencies {
     implementation(libs.androidx.exifinterface)
 
     implementation(libs.okhttp)
+
+    // Wake-word detection via openWakeWord (Apache 2.0) running on ONNX Runtime.
+    implementation(libs.onnxruntime.android)
 }

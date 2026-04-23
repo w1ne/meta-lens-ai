@@ -13,6 +13,9 @@ object AppSettings {
     private const val KEY_CAMERA_VIDEO_QUALITY = "camera_video_quality"
     private const val KEY_PICTURE_ANALYSIS_SYSTEM_INSTRUCTIONS = "picture_analysis_system_instructions_override"
     private const val KEY_CONVERSATION_SYSTEM_INSTRUCTIONS = "conversation_system_instructions_override"
+    private const val KEY_PORCUPINE_ACCESS_KEY = "porcupine_access_key"
+    private const val KEY_WAKE_KEYWORD = "wake_keyword"
+    private const val DEFAULT_WAKE_KEYWORD = "jarvis"
 
     fun getOpenAiApiKey(context: Context): String {
         val prefs = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -98,6 +101,29 @@ object AppSettings {
     fun resetConversationSystemInstructions(context: Context) {
         val prefs = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         prefs.edit().remove(KEY_CONVERSATION_SYSTEM_INSTRUCTIONS).apply()
+    }
+
+    fun getPorcupineAccessKey(context: Context): String {
+        val prefs = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        val fromPrefs = prefs.getString(KEY_PORCUPINE_ACCESS_KEY, null)?.trim().orEmpty()
+        if (fromPrefs.isNotBlank()) return fromPrefs
+        return BuildConfig.PORCUPINE_ACCESS_KEY
+    }
+
+    fun setPorcupineAccessKey(context: Context, accessKey: String) {
+        val prefs = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        prefs.edit().putString(KEY_PORCUPINE_ACCESS_KEY, accessKey.trim()).apply()
+    }
+
+    fun getWakeKeyword(context: Context): String {
+        val prefs = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        return prefs.getString(KEY_WAKE_KEYWORD, DEFAULT_WAKE_KEYWORD)?.trim().orEmpty()
+            .ifBlank { DEFAULT_WAKE_KEYWORD }
+    }
+
+    fun setWakeKeyword(context: Context, keyword: String) {
+        val prefs = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        prefs.edit().putString(KEY_WAKE_KEYWORD, keyword.trim().lowercase()).apply()
     }
 }
 

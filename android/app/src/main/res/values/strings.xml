@@ -107,4 +107,17 @@
     <string name="picture_analysis_result">AI Picture Analysis Result</string>
     <string name="picture_analysis_speak">Speak</string>
     <string name="picture_analysis_stop_speaking">Stop</string>
+
+    <!-- Wake word + ChatGPT bridge -->
+    <string name="accessibility_label">MetaLens ChatGPT Voice Auto-Tap</string>
+    <string name="accessibility_description">Auto-taps the voice mode button inside the ChatGPT app so wake-word triggers jump straight into Advanced Voice Mode.</string>
+    <string name="wake_word_title">Wake-Word to ChatGPT</string>
+    <string name="wake_word_start">Start listening</string>
+    <string name="wake_word_stop">Stop listening</string>
+    <string name="wake_word_status_on">Listening for wake word</string>
+    <string name="wake_word_status_off">Off</string>
+    <string name="settings_porcupine_key">Picovoice AccessKey</string>
+    <string name="settings_porcupine_key_help">Free from console.picovoice.ai. Required for wake-word detection.</string>
+    <string name="settings_wake_keyword">Wake keyword</string>
+    <string name="settings_wake_keyword_help">Built-ins: jarvis, computer, picovoice, porcupine, bumblebee, blueberry, terminator, grasshopper, americano, alexa, hey google, ok google, hey siri.</string>
 </resources>

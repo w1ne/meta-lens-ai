@@ -12,6 +12,8 @@ import androidx.compose.foundation.layout.size
 import androidx.compose.material.icons.Icons
 import androidx.compose.material.icons.filled.CameraAlt
 import androidx.compose.material.icons.filled.ChatBubble
+import androidx.compose.material.icons.filled.Mic
+import androidx.compose.material.icons.filled.MicOff
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material3.Icon
 import androidx.compose.material3.MaterialTheme
@@ -32,9 +34,11 @@ fun HomeScreen(
     modifier: Modifier = Modifier,
     isGlassesConnected: Boolean = false,
     isCapturingPhoto: Boolean = false,
+    isWakeWordActive: Boolean = false,
     onStartConversation: () -> Unit = {},
     onStartStreaming: () -> Unit = {},
     onPictureAnalysis: () -> Unit = {},
+    onToggleWakeWord: () -> Unit = {},
 ) {
     Column(
         modifier =
@@ -92,6 +96,22 @@ fun HomeScreen(
             icon = Icons.Filled.CameraAlt,
             enabled = isGlassesConnected && !isCapturingPhoto,
             onClick = onPictureAnalysis,
+            modifier = Modifier.fillMaxWidth(),
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        FeatureActionCard(
+            title =
+                if (isWakeWordActive) {
+                    stringResource(R.string.wake_word_stop)
+                } else {
+                    stringResource(R.string.wake_word_start)
+                },
+            subtitle = stringResource(R.string.wake_word_title),
+            icon = if (isWakeWordActive) Icons.Filled.MicOff else Icons.Filled.Mic,
+            enabled = true,
+            onClick = onToggleWakeWord,
             modifier = Modifier.fillMaxWidth(),
         )
     }

@@ -15,8 +15,12 @@ import androidx.compose.material3.Scaffold
 import androidx.compose.material3.Text
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
+import androidx.compose.runtime.mutableStateOf
+import androidx.compose.runtime.remember
+import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
+import com.metalens.app.wakeword.WakeWordService
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.Preview
 import androidx.compose.ui.unit.dp
@@ -168,15 +172,25 @@ private fun MetaLensNavHost(
             val activity = LocalContext.current as ComponentActivity
             val wearablesViewModel: WearablesViewModel = viewModel(activity)
             val wearablesUiState by wearablesViewModel.uiState.collectAsStateWithLifecycle()
+            var wakeWordActive by remember { mutableStateOf(false) }
             HomeScreen(
                 modifier = modifier,
                 isGlassesConnected = wearablesUiState.hasActiveDevice,
                 isCapturingPhoto = wearablesUiState.isCapturingPhoto || wearablesUiState.isPreparingPhotoSession,
+                isWakeWordActive = wakeWordActive,
                 onStartConversation = { navController.navigate(MetaLensRoute.Conversation.route) },
                 onStartStreaming = { navController.navigate(MetaLensRoute.Stream.route) },
                 onPictureAnalysis = {
                     wearablesViewModel.resetPictureAnalysis()
                     navController.navigate(MetaLensRoute.PictureAnalysis.route)
+                },
+                onToggleWakeWord = {
+                    if (wakeWordActive) {
+                        WakeWordService.stop(activity)
+                    } else {
+                        WakeWordService.start(activity)
+                    }
+                    wakeWordActive = !wakeWordActive
                 },
             )
         }
