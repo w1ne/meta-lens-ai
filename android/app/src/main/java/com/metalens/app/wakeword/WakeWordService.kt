@@ -151,7 +151,7 @@ class WakeWordService : LifecycleService() {
                             val binding = WAKE_WORD_BINDINGS[bestIdx]
                             Log.i(TAG, "Wake word fired: ${binding.word} (score=$bestScore) -> ${binding.pkg}")
                             WakeTrigger.markFired()
-                            launchPackage(binding.pkg)
+                            launchPackage(binding.pkg, withPhoto = binding.withPhoto)
                         }
                     }
                 }
@@ -176,10 +176,11 @@ class WakeWordService : LifecycleService() {
         scope = null
     }
 
-    private fun launchPackage(pkg: String) {
-        // Kick off an async glasses-photo capture. If it finishes, share the
-        // photo into the target app so the voice conversation has visual
-        // context. If it doesn't (no glasses, timeout), just launch plain.
+    private fun launchPackage(pkg: String, withPhoto: Boolean = false) {
+        if (!withPhoto) {
+            launchPlain(pkg)
+            return
+        }
         val photoScope = CoroutineScope(Dispatchers.Default + SupervisorJob())
         photoScope.launch {
             val photoUri = try {
@@ -187,11 +188,7 @@ class WakeWordService : LifecycleService() {
             } catch (t: Throwable) {
                 Log.w(TAG, "Glasses photo capture failed", t); null
             }
-            if (photoUri != null) {
-                shareImageToPackage(pkg, photoUri)
-            } else {
-                launchPlain(pkg)
-            }
+            if (photoUri != null) shareImageToPackage(pkg, photoUri) else launchPlain(pkg)
             photoScope.cancel()
         }
     }
@@ -300,12 +297,18 @@ class WakeWordService : LifecycleService() {
         private const val THRESHOLD = 0.5f
         private const val TRIGGER_COOLDOWN_MS = 4000L
 
-        data class WakeBinding(val word: String, val modelAsset: String, val pkg: String)
+        data class WakeBinding(
+            val word: String,
+            val modelAsset: String,
+            val pkg: String,
+            val withPhoto: Boolean = false,
+        )
 
         // Built-in openWakeWord models -> assistant app.
-        // openWakeWord doesn't ship a "Hey ChatGPT" / "Hey Claude" model, so we
-        // borrow "Hey Jarvis" for ChatGPT and "Hey Mycroft" for Claude until we
-        // train custom ones (~15 min each on a colab GPU).
+        // openWakeWord doesn't ship a "Hey ChatGPT" / "Hey Claude" model, so
+        // "Hey Jarvis" stands in for ChatGPT and "Hey Mycroft" for Claude.
+        // withPhoto defaults to false — photo sharing is an explicit opt-in
+        // per binding so we don't take a photo on every wake-word fire.
         val WAKE_WORD_BINDINGS = listOf(
             WakeBinding("Hey Jarvis", "hey_jarvis_v0.1.onnx", "com.openai.chatgpt"),
             WakeBinding("Hey Mycroft", "hey_mycroft_v0.1.onnx", "com.anthropic.claude"),
