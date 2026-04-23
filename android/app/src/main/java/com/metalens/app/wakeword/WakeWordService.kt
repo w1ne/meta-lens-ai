@@ -149,6 +149,7 @@ class WakeWordService : LifecycleService() {
                             triggerCooldownUntilMs = now + TRIGGER_COOLDOWN_MS
                             val binding = WAKE_WORD_BINDINGS[bestIdx]
                             Log.i(TAG, "Wake word fired: ${binding.word} (score=$bestScore) -> ${binding.pkg}")
+                            WakeTrigger.markFired()
                             launchPackage(binding.pkg)
                         }
                     }

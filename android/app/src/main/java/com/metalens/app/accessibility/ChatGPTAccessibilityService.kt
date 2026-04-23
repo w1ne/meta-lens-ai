@@ -5,6 +5,7 @@ import android.accessibilityservice.AccessibilityServiceInfo
 import android.util.Log
 import android.view.accessibility.AccessibilityEvent
 import android.view.accessibility.AccessibilityNodeInfo
+import com.metalens.app.wakeword.WakeTrigger
 
 /**
  * Auto-taps the "voice mode" button inside the ChatGPT Android app whenever
@@ -45,12 +46,17 @@ class ChatGPTAccessibilityService : AccessibilityService() {
         val now = System.currentTimeMillis()
         if (now - lastTapAtMs < DEBOUNCE_MS) return
 
+        // Only auto-tap when the wake-word service just fired. Without this, the
+        // service would also tap on manual app opens, making the assistant
+        // apps unusable for anything other than voice.
+        if (!WakeTrigger.consumeIfRecent()) return
+
         val root = rootInActiveWindow ?: return
         val voiceNode = findVoiceButton(root) ?: return
 
         if (voiceNode.performAction(AccessibilityNodeInfo.ACTION_CLICK)) {
             lastTapAtMs = now
-            Log.i(TAG, "Tapped voice-mode button")
+            Log.i(TAG, "Tapped voice-mode button in $pkg")
         } else {
             Log.w(TAG, "Voice-mode button found but ACTION_CLICK returned false")
         }
