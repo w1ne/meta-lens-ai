@@ -18,6 +18,7 @@ import com.meta.wearable.dat.camera.types.VideoFrame
 import com.meta.wearable.dat.core.Wearables
 import com.meta.wearable.dat.core.selectors.DeviceSelector
 import com.metalens.app.settings.AppSettings
+import com.metalens.app.wearables.GlassesCamera
 import com.metalens.app.wearables.WearablesViewModel
 import java.io.ByteArrayOutputStream
 import kotlinx.coroutines.Job
@@ -36,6 +37,7 @@ class StreamViewModel(
 ) : AndroidViewModel(application) {
     companion object {
         private const val TAG = "StreamViewModel"
+        private const val STREAM_OWNER = "stream"
     }
 
     private val deviceSelector: DeviceSelector = wearablesViewModel.deviceSelector
@@ -53,6 +55,13 @@ class StreamViewModel(
         stopStream()
         lastSessionState = null
 
+        if (!GlassesCamera.tryAcquire(STREAM_OWNER)) {
+            val owner = GlassesCamera.currentOwner ?: "unknown"
+            Log.w(TAG, "startStream() blocked: camera busy ($owner)")
+            _uiState.update { it.copy(recentError = "Camera busy ($owner)") }
+            return
+        }
+
         val session =
             try {
                 Wearables.startStreamSession(
@@ -63,6 +72,7 @@ class StreamViewModel(
             } catch (t: Throwable) {
                 Log.e(TAG, "startStreamSession() failed", t)
                 _uiState.update { it.copy(recentError = t.message ?: "Failed to start stream session") }
+                GlassesCamera.release(STREAM_OWNER)
                 return
             }
 
@@ -118,6 +128,7 @@ class StreamViewModel(
         streamSession?.close()
         streamSession = null
         _uiState.update { StreamUiState() }
+        GlassesCamera.release(STREAM_OWNER)
     }
 
     private fun handleVideoFrame(videoFrame: VideoFrame) {
