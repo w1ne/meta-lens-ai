@@ -119,4 +119,8 @@
     <string name="settings_blackbox_status_format">%1$d captured · %2$d skipped · %3$d failed</string>
     <string name="settings_blackbox_idle">Tap the toggle above to start auto-capture</string>
     <string name="settings_blackbox_pauses_with_stream">Pauses automatically while streaming or recording</string>
+    <string name="settings_blackbox_auto_analyze">Auto-analyze captures</string>
+    <string name="settings_blackbox_auto_analyze_subtitle_off">Off — photos saved without captions</string>
+    <string name="settings_blackbox_auto_analyze_subtitle_on">On — describes each capture with AI</string>
+    <string name="settings_blackbox_latest_label">Latest</string>
 </resources>

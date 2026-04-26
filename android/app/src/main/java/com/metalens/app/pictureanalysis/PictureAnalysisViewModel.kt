@@ -53,6 +53,13 @@ class PictureAnalysisViewModel(
 
                 val prompt = AppSettings.getPictureAnalysisSystemInstructions(ctx).trim()
 
+                val vectorStoreId =
+                    if (AppSettings.getMemoryEnabled(ctx)) {
+                        AppSettings.getMemoryVectorStoreId(ctx).takeIf { it.isNotBlank() }
+                    } else {
+                        null
+                    }
+
                 val result =
                     withContext(Dispatchers.IO) {
                         service.analyzeImage(
@@ -60,6 +67,7 @@ class PictureAnalysisViewModel(
                             model = model,
                             prompt = prompt,
                             bitmap = bitmap,
+                            vectorStoreId = vectorStoreId,
                         )
                     }
 

@@ -158,6 +158,9 @@ fun SettingsScreen(
     var showSelectIntervalDialog by rememberSaveable { mutableStateOf(false) }
     var intervalDraftSeconds by rememberSaveable { mutableStateOf(intervalSeconds) }
     val intervalStatus by IntervalCaptureState.status.collectAsStateWithLifecycle()
+    var autoAnalyzeEnabled by rememberSaveable {
+        mutableStateOf(AppSettings.getIntervalAutoAnalyzeEnabled(context))
+    }
 
     val scope = rememberCoroutineScope()
     var isCheckingConnection by rememberSaveable { mutableStateOf(false) }
@@ -918,6 +921,24 @@ fun SettingsScreen(
             modifier = Modifier.fillMaxWidth(),
         )
 
+        Spacer(modifier = Modifier.height(12.dp))
+
+        FeatureActionCard(
+            title = stringResource(R.string.settings_blackbox_auto_analyze),
+            subtitle = if (autoAnalyzeEnabled) {
+                stringResource(R.string.settings_blackbox_auto_analyze_subtitle_on)
+            } else {
+                stringResource(R.string.settings_blackbox_auto_analyze_subtitle_off)
+            },
+            icon = if (autoAnalyzeEnabled) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked,
+            onClick = {
+                val next = !autoAnalyzeEnabled
+                AppSettings.setIntervalAutoAnalyzeEnabled(context, next)
+                autoAnalyzeEnabled = next
+            },
+            modifier = Modifier.fillMaxWidth(),
+        )
+
         Spacer(modifier = Modifier.height(8.dp))
 
         Text(
@@ -934,6 +955,15 @@ fun SettingsScreen(
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+
+        intervalStatus.lastCaption?.takeIf { it.isNotBlank() }?.let { caption ->
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "${stringResource(R.string.settings_blackbox_latest_label)}: $caption",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+        }
 
         Spacer(modifier = Modifier.height(4.dp))
 
