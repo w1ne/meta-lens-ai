@@ -13,6 +13,10 @@ object AppSettings {
     private const val KEY_CAMERA_VIDEO_QUALITY = "camera_video_quality"
     private const val KEY_PICTURE_ANALYSIS_SYSTEM_INSTRUCTIONS = "picture_analysis_system_instructions_override"
     private const val KEY_CONVERSATION_SYSTEM_INSTRUCTIONS = "conversation_system_instructions_override"
+    private const val KEY_INTERVAL_CAPTURE_ENABLED = "interval_capture_enabled"
+    private const val KEY_INTERVAL_CAPTURE_SECONDS = "interval_capture_seconds"
+    const val INTERVAL_CAPTURE_DEFAULT_SECONDS = 300
+    const val INTERVAL_CAPTURE_MIN_SECONDS = 60
 
     fun getOpenAiApiKey(context: Context): String {
         val prefs = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
@@ -98,6 +102,29 @@ object AppSettings {
     fun resetConversationSystemInstructions(context: Context) {
         val prefs = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
         prefs.edit().remove(KEY_CONVERSATION_SYSTEM_INSTRUCTIONS).apply()
+    }
+
+    fun getIntervalCaptureEnabled(context: Context): Boolean {
+        val prefs = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        return prefs.getBoolean(KEY_INTERVAL_CAPTURE_ENABLED, false)
+    }
+
+    fun setIntervalCaptureEnabled(context: Context, enabled: Boolean) {
+        val prefs = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        prefs.edit().putBoolean(KEY_INTERVAL_CAPTURE_ENABLED, enabled).apply()
+    }
+
+    fun getIntervalCaptureSeconds(context: Context): Int {
+        val prefs = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        return prefs.getInt(KEY_INTERVAL_CAPTURE_SECONDS, INTERVAL_CAPTURE_DEFAULT_SECONDS)
+            .coerceAtLeast(INTERVAL_CAPTURE_MIN_SECONDS)
+    }
+
+    fun setIntervalCaptureSeconds(context: Context, seconds: Int) {
+        val prefs = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        prefs.edit()
+            .putInt(KEY_INTERVAL_CAPTURE_SECONDS, seconds.coerceAtLeast(INTERVAL_CAPTURE_MIN_SECONDS))
+            .apply()
     }
 }
 

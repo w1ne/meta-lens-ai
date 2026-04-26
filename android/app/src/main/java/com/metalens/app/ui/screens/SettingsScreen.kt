@@ -32,6 +32,8 @@ import androidx.compose.material.icons.filled.Wifi
 import androidx.compose.material.icons.filled.ArrowDropDown
 import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Psychology
+import androidx.compose.material.icons.filled.RadioButtonUnchecked
+import androidx.compose.material.icons.filled.Schedule
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material.icons.filled.Visibility
@@ -71,6 +73,8 @@ import com.metalens.app.wearables.WearablesViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.meta.wearable.dat.camera.types.VideoQuality
 import com.metalens.app.conversation.OpenAIRealtimeClient
+import com.metalens.app.intervalcapture.IntervalCaptureController
+import com.metalens.app.intervalcapture.IntervalCaptureState
 import com.metalens.app.settings.AppSettings
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -144,6 +148,17 @@ fun SettingsScreen(
     var showSelectCameraQualityDialog by rememberSaveable { mutableStateOf(false) }
     var cameraQualityDraft by rememberSaveable { mutableStateOf(cameraQuality) }
 
+    val intervalOptionsSeconds = rememberSaveable { listOf(60, 120, 300, 600, 900, 1800, 3600) }
+    var intervalEnabled by rememberSaveable {
+        mutableStateOf(AppSettings.getIntervalCaptureEnabled(context))
+    }
+    var intervalSeconds by rememberSaveable {
+        mutableStateOf(AppSettings.getIntervalCaptureSeconds(context))
+    }
+    var showSelectIntervalDialog by rememberSaveable { mutableStateOf(false) }
+    var intervalDraftSeconds by rememberSaveable { mutableStateOf(intervalSeconds) }
+    val intervalStatus by IntervalCaptureState.status.collectAsStateWithLifecycle()
+
     val scope = rememberCoroutineScope()
     var isCheckingConnection by rememberSaveable { mutableStateOf(false) }
     var lastConnectionCheckResult by rememberSaveable { mutableStateOf<String?>(null) }
@@ -183,6 +198,12 @@ fun SettingsScreen(
     LaunchedEffect(showSelectCameraQualityDialog) {
         if (showSelectCameraQualityDialog) {
             cameraQualityDraft = cameraQuality
+        }
+    }
+
+    LaunchedEffect(showSelectIntervalDialog) {
+        if (showSelectIntervalDialog) {
+            intervalDraftSeconds = intervalSeconds
         }
     }
 
@@ -527,6 +548,58 @@ fun SettingsScreen(
         )
     }
 
+    if (showSelectIntervalDialog) {
+        AlertDialog(
+            onDismissRequest = { showSelectIntervalDialog = false },
+            containerColor = MaterialTheme.colorScheme.surface,
+            titleContentColor = MaterialTheme.colorScheme.onSurface,
+            textContentColor = MaterialTheme.colorScheme.onSurface,
+            title = { Text(stringResource(R.string.settings_blackbox_interval_dialog_title)) },
+            text = {
+                Column(verticalArrangement = Arrangement.spacedBy(8.dp)) {
+                    intervalOptionsSeconds.forEach { secs ->
+                        val mins = secs / 60
+                        val isSelected = secs == intervalDraftSeconds
+                        FeatureActionCard(
+                            title = stringResource(R.string.settings_blackbox_interval_value_minutes, mins),
+                            subtitle = null,
+                            icon = if (isSelected) Icons.Filled.CheckCircle else Icons.Filled.Schedule,
+                            onClick = { intervalDraftSeconds = secs },
+                            enabled = true,
+                            modifier = Modifier.fillMaxWidth(),
+                        )
+                    }
+                }
+            },
+            confirmButton = {
+                TextButton(
+                    colors =
+                        ButtonDefaults.textButtonColors(
+                            contentColor = MaterialTheme.colorScheme.primary,
+                        ),
+                    onClick = {
+                        AppSettings.setIntervalCaptureSeconds(context, intervalDraftSeconds)
+                        intervalSeconds = intervalDraftSeconds
+                        showSelectIntervalDialog = false
+                    },
+                ) {
+                    Text(stringResource(R.string.common_save))
+                }
+            },
+            dismissButton = {
+                TextButton(
+                    colors =
+                        ButtonDefaults.textButtonColors(
+                            contentColor = MaterialTheme.colorScheme.onSurfaceVariant,
+                        ),
+                    onClick = { showSelectIntervalDialog = false },
+                ) {
+                    Text(stringResource(R.string.common_cancel))
+                }
+            },
+        )
+    }
+
     if (showConnectedDevicesDialog) {
         val connectedDevices = uiState.connectedDevices
         AlertDialog(
@@ -801,6 +874,73 @@ fun SettingsScreen(
             icon = Icons.Filled.Videocam,
             onClick = { showSelectCameraQualityDialog = true },
             modifier = Modifier.fillMaxWidth(),
+        )
+
+        Spacer(modifier = Modifier.height(24.dp))
+
+        SettingsSectionTitle(text = stringResource(R.string.settings_group_blackbox))
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        val intervalMinutes = intervalSeconds / 60
+        val intervalLabel = stringResource(R.string.settings_blackbox_interval_value_minutes, intervalMinutes)
+        val toggleSubtitle =
+            if (intervalEnabled) {
+                stringResource(R.string.settings_blackbox_enabled_subtitle_on, intervalLabel)
+            } else {
+                stringResource(R.string.settings_blackbox_enabled_subtitle_off)
+            }
+        FeatureActionCard(
+            title = stringResource(R.string.settings_blackbox_enabled),
+            subtitle = toggleSubtitle,
+            icon = if (intervalEnabled) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked,
+            onClick = {
+                if (intervalEnabled) {
+                    AppSettings.setIntervalCaptureEnabled(context, false)
+                    IntervalCaptureController.stop(context)
+                    intervalEnabled = false
+                } else {
+                    AppSettings.setIntervalCaptureEnabled(context, true)
+                    IntervalCaptureController.start(context)
+                    intervalEnabled = true
+                }
+            },
+            modifier = Modifier.fillMaxWidth(),
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        FeatureActionCard(
+            title = stringResource(R.string.settings_blackbox_interval),
+            subtitle = intervalLabel,
+            icon = Icons.Filled.Schedule,
+            onClick = { showSelectIntervalDialog = true },
+            modifier = Modifier.fillMaxWidth(),
+        )
+
+        Spacer(modifier = Modifier.height(8.dp))
+
+        Text(
+            text = if (intervalStatus.running || intervalStatus.capturedToday > 0) {
+                stringResource(
+                    R.string.settings_blackbox_status_format,
+                    intervalStatus.capturedToday,
+                    intervalStatus.skippedToday,
+                    intervalStatus.failedToday,
+                )
+            } else {
+                stringResource(R.string.settings_blackbox_idle)
+            },
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
+        )
+
+        Spacer(modifier = Modifier.height(4.dp))
+
+        Text(
+            text = stringResource(R.string.settings_blackbox_pauses_with_stream),
+            style = MaterialTheme.typography.bodySmall,
+            color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
 
         Spacer(modifier = Modifier.height(24.dp))

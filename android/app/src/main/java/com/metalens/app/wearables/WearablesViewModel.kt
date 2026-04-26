@@ -26,6 +26,11 @@ import kotlinx.coroutines.flow.update
 import kotlinx.coroutines.launch
 
 class WearablesViewModel(application: Application) : AndroidViewModel(application) {
+    companion object {
+        private const val MANUAL_OWNER = "manual_capture"
+        private const val MANUAL_PREPARE_OWNER = "manual_prepare"
+    }
+
     private val _uiState = MutableStateFlow(WearablesUiState())
     val uiState: StateFlow<WearablesUiState> = _uiState.asStateFlow()
 
@@ -43,6 +48,7 @@ class WearablesViewModel(application: Application) : AndroidViewModel(applicatio
         val session = preparedPhotoSession
         preparedPhotoSession = null
         runCatching { session?.close() }
+        GlassesCamera.release(MANUAL_PREPARE_OWNER)
     }
 
     fun startMonitoring() {
@@ -149,8 +155,13 @@ class WearablesViewModel(application: Application) : AndroidViewModel(applicatio
                 return@launch
             }
 
-            // Reset any previous session
+            // Reset any previous session (also releases any mutex hold from a prior call).
             closePreparedPhotoSessionOnce()
+
+            if (!GlassesCamera.tryAcquire(MANUAL_PREPARE_OWNER)) {
+                setRecentError("Camera busy (${GlassesCamera.currentOwner ?: "unknown"})")
+                return@launch
+            }
 
             _uiState.update {
                 it.copy(
@@ -163,51 +174,60 @@ class WearablesViewModel(application: Application) : AndroidViewModel(applicatio
             }
 
             var assignedToField = false
-            val session =
-                try {
-                    val quality = AppSettings.getCameraVideoQuality(getApplication())
-                    Wearables.startStreamSession(
-                        getApplication(),
-                        deviceSelector,
-                        StreamConfiguration(videoQuality = quality, 24),
-                    )
-                } catch (t: Throwable) {
-                    _uiState.update {
-                        it.copy(
-                            isPreparingPhotoSession = false,
-                            isPhotoSessionReady = false,
-                            recentError = t.message ?: "Failed to start camera session",
-                        )
-                    }
-                    return@launch
-                }
-
             try {
-                // Wait for STREAMING so capture is instant later
-                val streamingState =
-                    withTimeoutOrNull(8_000) {
-                        session.state.first { it == StreamSessionState.STREAMING }
-                    }
-
-                if (streamingState == null) {
-                    _uiState.update {
-                        it.copy(
-                            isPreparingPhotoSession = false,
-                            isPhotoSessionReady = false,
-                            recentError = "Timed out waiting for stream",
+                val session =
+                    try {
+                        val quality = AppSettings.getCameraVideoQuality(getApplication())
+                        Wearables.startStreamSession(
+                            getApplication(),
+                            deviceSelector,
+                            StreamConfiguration(videoQuality = quality, 24),
                         )
+                    } catch (t: Throwable) {
+                        _uiState.update {
+                            it.copy(
+                                isPreparingPhotoSession = false,
+                                isPhotoSessionReady = false,
+                                recentError = t.message ?: "Failed to start camera session",
+                            )
+                        }
+                        return@launch
                     }
-                    return@launch
-                }
 
-                // Publish prepared session only once fully ready.
-                preparedPhotoSession = session
-                assignedToField = true
-                _uiState.update { it.copy(isPreparingPhotoSession = false, isPhotoSessionReady = true) }
+                try {
+                    // Wait for STREAMING so capture is instant later
+                    val streamingState =
+                        withTimeoutOrNull(8_000) {
+                            session.state.first { it == StreamSessionState.STREAMING }
+                        }
+
+                    if (streamingState == null) {
+                        _uiState.update {
+                            it.copy(
+                                isPreparingPhotoSession = false,
+                                isPhotoSessionReady = false,
+                                recentError = "Timed out waiting for stream",
+                            )
+                        }
+                        return@launch
+                    }
+
+                    // Publish prepared session only once fully ready.
+                    preparedPhotoSession = session
+                    assignedToField = true
+                    _uiState.update { it.copy(isPreparingPhotoSession = false, isPhotoSessionReady = true) }
+                } finally {
+                    // If we never stored it, we must close to avoid leaks.
+                    if (!assignedToField) {
+                        runCatching { session.close() }
+                    }
+                }
             } finally {
-                // If we never stored it, we must close to avoid leaks.
+                // If the session wasn't handed off to the field, release the mutex now.
+                // Otherwise capturePreparedPhoto / resetPictureAnalysis will release via
+                // closePreparedPhotoSessionOnce.
                 if (!assignedToField) {
-                    runCatching { session.close() }
+                    GlassesCamera.release(MANUAL_PREPARE_OWNER)
                 }
             }
         }
@@ -288,70 +308,79 @@ class WearablesViewModel(application: Application) : AndroidViewModel(applicatio
                 return@launch
             }
 
-            _uiState.update { it.copy(isCapturingPhoto = true, capturedPhoto = null, recentError = null) }
+            if (!GlassesCamera.tryAcquire(MANUAL_OWNER)) {
+                setRecentError("Camera busy (${GlassesCamera.currentOwner ?: "unknown"})")
+                return@launch
+            }
 
-            val session =
+            try {
+                _uiState.update { it.copy(isCapturingPhoto = true, capturedPhoto = null, recentError = null) }
+
+                val session =
+                    try {
+                        val quality = AppSettings.getCameraVideoQuality(getApplication())
+                        Wearables.startStreamSession(
+                            getApplication(),
+                            deviceSelector,
+                            StreamConfiguration(videoQuality = quality, 24),
+                        )
+                    } catch (t: Throwable) {
+                        _uiState.update {
+                            it.copy(
+                                isCapturingPhoto = false,
+                                recentError = t.message ?: "Failed to start camera session",
+                            )
+                        }
+                        return@launch
+                    }
+
                 try {
-                    val quality = AppSettings.getCameraVideoQuality(getApplication())
-                    Wearables.startStreamSession(
-                        getApplication(),
-                        deviceSelector,
-                        StreamConfiguration(videoQuality = quality, 24),
-                    )
+                    // Wait until the stream is actually running (avoid hanging forever)
+                    val streamingState =
+                        withTimeoutOrNull(8_000) {
+                            // Session.state is a Flow/StateFlow exposed by SDK
+                            session.state.first { it == StreamSessionState.STREAMING }
+                        }
+                    if (streamingState == null) {
+                        throw IllegalStateException("Timed out waiting for stream")
+                    }
+
+                    val result = session.capturePhoto()
+
+                    var bitmap: Bitmap? = null
+                    result
+                        .onSuccess { photoData ->
+                            bitmap =
+                                when (photoData) {
+                                    is PhotoData.Bitmap -> photoData.bitmap
+                                    is PhotoData.HEIC -> {
+                                        val byteArray = ByteArray(photoData.data.remaining())
+                                        photoData.data.get(byteArray)
+                                        BitmapFactory.decodeByteArray(byteArray, 0, byteArray.size)
+                                    }
+                                }
+                        }
+                        .onFailure { err ->
+                            throw err
+                        }
+
+                    if (bitmap == null) {
+                        throw IllegalStateException("Failed to decode photo")
+                    }
+
+                    _uiState.update { it.copy(capturedPhoto = bitmap, isCapturingPhoto = false) }
                 } catch (t: Throwable) {
                     _uiState.update {
                         it.copy(
                             isCapturingPhoto = false,
-                            recentError = t.message ?: "Failed to start camera session",
+                            recentError = t.message ?: "Photo capture failed",
                         )
                     }
-                    return@launch
-                }
-
-            try {
-                // Wait until the stream is actually running (avoid hanging forever)
-                val streamingState =
-                    withTimeoutOrNull(8_000) {
-                        // Session.state is a Flow/StateFlow exposed by SDK
-                        session.state.first { it == StreamSessionState.STREAMING }
-                    }
-                if (streamingState == null) {
-                    throw IllegalStateException("Timed out waiting for stream")
-                }
-
-                val result = session.capturePhoto()
-
-                var bitmap: Bitmap? = null
-                result
-                    .onSuccess { photoData ->
-                        bitmap =
-                            when (photoData) {
-                                is PhotoData.Bitmap -> photoData.bitmap
-                                is PhotoData.HEIC -> {
-                                    val byteArray = ByteArray(photoData.data.remaining())
-                                    photoData.data.get(byteArray)
-                                    BitmapFactory.decodeByteArray(byteArray, 0, byteArray.size)
-                                }
-                            }
-                    }
-                    .onFailure { err ->
-                        throw err
-                    }
-
-                if (bitmap == null) {
-                    throw IllegalStateException("Failed to decode photo")
-                }
-
-                _uiState.update { it.copy(capturedPhoto = bitmap, isCapturingPhoto = false) }
-            } catch (t: Throwable) {
-                _uiState.update {
-                    it.copy(
-                        isCapturingPhoto = false,
-                        recentError = t.message ?: "Photo capture failed",
-                    )
+                } finally {
+                    session.close()
                 }
             } finally {
-                session.close()
+                GlassesCamera.release(MANUAL_OWNER)
             }
         }
     }

@@ -107,4 +107,16 @@
     <string name="picture_analysis_result">AI Picture Analysis Result</string>
     <string name="picture_analysis_speak">Speak</string>
     <string name="picture_analysis_stop_speaking">Stop</string>
+
+    <string name="settings_group_blackbox">Auto-capture (Blackbox)</string>
+    <string name="settings_blackbox_enabled">Auto-capture</string>
+    <string name="settings_blackbox_enabled_subtitle_off">Off — tap to enable</string>
+    <string name="settings_blackbox_enabled_subtitle_on">Running — every %1$s</string>
+    <string name="settings_blackbox_interval">Interval</string>
+    <string name="settings_blackbox_interval_dialog_title">Capture interval</string>
+    <string name="settings_blackbox_interval_value_minutes">%1$d min</string>
+    <string name="settings_blackbox_status">Today</string>
+    <string name="settings_blackbox_status_format">%1$d captured · %2$d skipped · %3$d failed</string>
+    <string name="settings_blackbox_idle">Tap the toggle above to start auto-capture</string>
+    <string name="settings_blackbox_pauses_with_stream">Pauses automatically while streaming or recording</string>
 </resources>
