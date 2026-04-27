@@ -123,4 +123,8 @@
     <string name="settings_blackbox_auto_analyze_subtitle_off">Off — photos saved without captions</string>
     <string name="settings_blackbox_auto_analyze_subtitle_on">On — describes each capture with AI</string>
     <string name="settings_blackbox_latest_label">Latest</string>
+    <string name="settings_blackbox_export">Export captures</string>
+    <string name="settings_blackbox_export_subtitle">Share photos + journal as a zip</string>
+    <string name="settings_blackbox_export_empty">No captures yet to export</string>
+    <string name="settings_blackbox_export_chooser_title">Share blackbox export</string>
 </resources>

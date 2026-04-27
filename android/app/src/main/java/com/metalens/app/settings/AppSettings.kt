@@ -132,8 +132,7 @@ object AppSettings {
 
     fun getIntervalAutoAnalyzeEnabled(context: Context): Boolean {
         val prefs = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
-        // Default true: photos are useless without captions for the lifelog use case.
-        return prefs.getBoolean(KEY_INTERVAL_AUTO_ANALYZE_ENABLED, true)
+        return prefs.getBoolean(KEY_INTERVAL_AUTO_ANALYZE_ENABLED, false)
     }
 
     fun setIntervalAutoAnalyzeEnabled(context: Context, enabled: Boolean) {

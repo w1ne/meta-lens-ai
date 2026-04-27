@@ -34,6 +34,7 @@ import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material.icons.filled.Visibility
@@ -73,6 +74,7 @@ import com.metalens.app.wearables.WearablesViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.meta.wearable.dat.camera.types.VideoQuality
 import com.metalens.app.conversation.OpenAIRealtimeClient
+import com.metalens.app.intervalcapture.BlackboxExporter
 import com.metalens.app.intervalcapture.IntervalCaptureController
 import com.metalens.app.intervalcapture.IntervalCaptureState
 import com.metalens.app.settings.AppSettings
@@ -935,6 +937,29 @@ fun SettingsScreen(
                 val next = !autoAnalyzeEnabled
                 AppSettings.setIntervalAutoAnalyzeEnabled(context, next)
                 autoAnalyzeEnabled = next
+            },
+            modifier = Modifier.fillMaxWidth(),
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        val exportEmptyMessage = stringResource(R.string.settings_blackbox_export_empty)
+        val exportChooserTitle = stringResource(R.string.settings_blackbox_export_chooser_title)
+        FeatureActionCard(
+            title = stringResource(R.string.settings_blackbox_export),
+            subtitle = stringResource(R.string.settings_blackbox_export_subtitle),
+            icon = Icons.Filled.Share,
+            onClick = {
+                when (val r = BlackboxExporter.buildShareIntent(context)) {
+                    BlackboxExporter.Result.Empty ->
+                        Toast.makeText(context, exportEmptyMessage, Toast.LENGTH_SHORT).show()
+                    is BlackboxExporter.Result.Ready -> {
+                        val chooser = Intent.createChooser(r.intent, exportChooserTitle).apply {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        context.startActivity(chooser)
+                    }
+                }
             },
             modifier = Modifier.fillMaxWidth(),
         )
