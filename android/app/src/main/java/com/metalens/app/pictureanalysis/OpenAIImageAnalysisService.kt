@@ -37,6 +37,7 @@ class OpenAIImageAnalysisService(
         model: String,
         prompt: String,
         bitmap: Bitmap,
+        vectorStoreId: String? = null,
     ): Result<String> {
         if (apiKey.isBlank()) {
             return Result.failure(IllegalStateException("Missing OpenAI API key"))
@@ -73,6 +74,18 @@ class OpenAIImageAnalysisService(
                     .put("model", model)
                     .put("input", input)
                     .put("max_output_tokens", 250)
+                    .apply {
+                        if (!vectorStoreId.isNullOrBlank()) {
+                            put(
+                                "tools",
+                                JSONArray().put(
+                                    JSONObject()
+                                        .put("type", "file_search")
+                                        .put("vector_store_ids", JSONArray().put(vectorStoreId)),
+                                ),
+                            )
+                        }
+                    }
                     .toString()
 
             val request =

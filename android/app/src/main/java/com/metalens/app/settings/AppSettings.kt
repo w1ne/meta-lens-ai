@@ -15,6 +15,9 @@ object AppSettings {
     private const val KEY_CONVERSATION_SYSTEM_INSTRUCTIONS = "conversation_system_instructions_override"
     private const val KEY_INTERVAL_CAPTURE_ENABLED = "interval_capture_enabled"
     private const val KEY_INTERVAL_CAPTURE_SECONDS = "interval_capture_seconds"
+    private const val KEY_INTERVAL_AUTO_ANALYZE_ENABLED = "interval_auto_analyze_enabled"
+    private const val KEY_MEMORY_ENABLED = "memory_enabled"
+    private const val KEY_MEMORY_VECTOR_STORE_ID = "memory_vector_store_id"
     const val INTERVAL_CAPTURE_DEFAULT_SECONDS = 300
     const val INTERVAL_CAPTURE_MIN_SECONDS = 60
 
@@ -125,6 +128,36 @@ object AppSettings {
         prefs.edit()
             .putInt(KEY_INTERVAL_CAPTURE_SECONDS, seconds.coerceAtLeast(INTERVAL_CAPTURE_MIN_SECONDS))
             .apply()
+    }
+
+    fun getIntervalAutoAnalyzeEnabled(context: Context): Boolean {
+        val prefs = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        return prefs.getBoolean(KEY_INTERVAL_AUTO_ANALYZE_ENABLED, false)
+    }
+
+    fun setIntervalAutoAnalyzeEnabled(context: Context, enabled: Boolean) {
+        val prefs = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        prefs.edit().putBoolean(KEY_INTERVAL_AUTO_ANALYZE_ENABLED, enabled).apply()
+    }
+
+    fun getMemoryEnabled(context: Context): Boolean {
+        val prefs = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        return prefs.getBoolean(KEY_MEMORY_ENABLED, true)
+    }
+
+    fun setMemoryEnabled(context: Context, enabled: Boolean) {
+        val prefs = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        prefs.edit().putBoolean(KEY_MEMORY_ENABLED, enabled).apply()
+    }
+
+    fun getMemoryVectorStoreId(context: Context): String {
+        val prefs = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        return prefs.getString(KEY_MEMORY_VECTOR_STORE_ID, null).orEmpty()
+    }
+
+    fun setMemoryVectorStoreId(context: Context, id: String) {
+        val prefs = context.applicationContext.getSharedPreferences(PREFS_NAME, Context.MODE_PRIVATE)
+        prefs.edit().putString(KEY_MEMORY_VECTOR_STORE_ID, id.trim()).apply()
     }
 }
 

@@ -175,8 +175,13 @@ class IntervalCaptureForegroundService : Service() {
                 }
 
                 val now = System.currentTimeMillis()
-                writeJpeg(bytes, now)
+                val photoFile = writeJpeg(bytes, now)
                 IntervalCaptureState.recordCaptured(now)
+
+                // Vision analysis + memory upload run after we've already counted the
+                // capture as successful. They're best-effort and must not affect the
+                // running counters or block subsequent ticks.
+                runCatching { AutoAnalyze.run(applicationContext, photoFile, now) }
             } finally {
                 runCatching { session.close() }
             }
@@ -204,11 +209,12 @@ class IntervalCaptureForegroundService : Service() {
         }
     }
 
-    private fun writeJpeg(bytes: ByteArray, atMs: Long) {
+    private fun writeJpeg(bytes: ByteArray, atMs: Long): File {
         val dir = File(applicationContext.filesDir, "blackbox").apply { mkdirs() }
         val name = SimpleDateFormat("yyyyMMdd-HHmmss", Locale.US).format(Date(atMs)) + ".jpg"
         val target = File(dir, name)
         FileOutputStream(target).use { it.write(bytes) }
+        return target
     }
 
     private fun startInForegroundIfNeeded() {

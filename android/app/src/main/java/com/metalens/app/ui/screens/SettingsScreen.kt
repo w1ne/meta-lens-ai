@@ -34,6 +34,7 @@ import androidx.compose.material.icons.filled.Key
 import androidx.compose.material.icons.filled.Psychology
 import androidx.compose.material.icons.filled.RadioButtonUnchecked
 import androidx.compose.material.icons.filled.Schedule
+import androidx.compose.material.icons.filled.Share
 import androidx.compose.material.icons.filled.Tune
 import androidx.compose.material.icons.filled.Videocam
 import androidx.compose.material.icons.filled.Visibility
@@ -73,6 +74,7 @@ import com.metalens.app.wearables.WearablesViewModel
 import androidx.lifecycle.viewmodel.compose.viewModel
 import com.meta.wearable.dat.camera.types.VideoQuality
 import com.metalens.app.conversation.OpenAIRealtimeClient
+import com.metalens.app.intervalcapture.BlackboxExporter
 import com.metalens.app.intervalcapture.IntervalCaptureController
 import com.metalens.app.intervalcapture.IntervalCaptureState
 import com.metalens.app.settings.AppSettings
@@ -158,6 +160,9 @@ fun SettingsScreen(
     var showSelectIntervalDialog by rememberSaveable { mutableStateOf(false) }
     var intervalDraftSeconds by rememberSaveable { mutableStateOf(intervalSeconds) }
     val intervalStatus by IntervalCaptureState.status.collectAsStateWithLifecycle()
+    var autoAnalyzeEnabled by rememberSaveable {
+        mutableStateOf(AppSettings.getIntervalAutoAnalyzeEnabled(context))
+    }
 
     val scope = rememberCoroutineScope()
     var isCheckingConnection by rememberSaveable { mutableStateOf(false) }
@@ -918,6 +923,47 @@ fun SettingsScreen(
             modifier = Modifier.fillMaxWidth(),
         )
 
+        Spacer(modifier = Modifier.height(12.dp))
+
+        FeatureActionCard(
+            title = stringResource(R.string.settings_blackbox_auto_analyze),
+            subtitle = if (autoAnalyzeEnabled) {
+                stringResource(R.string.settings_blackbox_auto_analyze_subtitle_on)
+            } else {
+                stringResource(R.string.settings_blackbox_auto_analyze_subtitle_off)
+            },
+            icon = if (autoAnalyzeEnabled) Icons.Filled.CheckCircle else Icons.Filled.RadioButtonUnchecked,
+            onClick = {
+                val next = !autoAnalyzeEnabled
+                AppSettings.setIntervalAutoAnalyzeEnabled(context, next)
+                autoAnalyzeEnabled = next
+            },
+            modifier = Modifier.fillMaxWidth(),
+        )
+
+        Spacer(modifier = Modifier.height(12.dp))
+
+        val exportEmptyMessage = stringResource(R.string.settings_blackbox_export_empty)
+        val exportChooserTitle = stringResource(R.string.settings_blackbox_export_chooser_title)
+        FeatureActionCard(
+            title = stringResource(R.string.settings_blackbox_export),
+            subtitle = stringResource(R.string.settings_blackbox_export_subtitle),
+            icon = Icons.Filled.Share,
+            onClick = {
+                when (val r = BlackboxExporter.buildShareIntent(context)) {
+                    BlackboxExporter.Result.Empty ->
+                        Toast.makeText(context, exportEmptyMessage, Toast.LENGTH_SHORT).show()
+                    is BlackboxExporter.Result.Ready -> {
+                        val chooser = Intent.createChooser(r.intent, exportChooserTitle).apply {
+                            addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        }
+                        context.startActivity(chooser)
+                    }
+                }
+            },
+            modifier = Modifier.fillMaxWidth(),
+        )
+
         Spacer(modifier = Modifier.height(8.dp))
 
         Text(
@@ -934,6 +980,15 @@ fun SettingsScreen(
             style = MaterialTheme.typography.bodySmall,
             color = MaterialTheme.colorScheme.onSurfaceVariant,
         )
+
+        intervalStatus.lastCaption?.takeIf { it.isNotBlank() }?.let { caption ->
+            Spacer(modifier = Modifier.height(4.dp))
+            Text(
+                text = "${stringResource(R.string.settings_blackbox_latest_label)}: $caption",
+                style = MaterialTheme.typography.bodySmall,
+                color = MaterialTheme.colorScheme.onSurface,
+            )
+        }
 
         Spacer(modifier = Modifier.height(4.dp))
 

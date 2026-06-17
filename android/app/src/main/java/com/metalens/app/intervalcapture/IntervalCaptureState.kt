@@ -11,6 +11,7 @@ data class IntervalCaptureStatus(
     val skippedToday: Int = 0,
     val failedToday: Int = 0,
     val lastCaptureAtMs: Long? = null,
+    val lastCaption: String? = null,
     val lastError: String? = null,
 )
 
@@ -54,7 +55,19 @@ object IntervalCaptureState {
         }
     }
 
+    fun recordCaption(caption: String?) {
+        _status.update { it.copy(lastCaption = caption) }
+    }
+
     fun resetCounters() {
-        _status.update { it.copy(capturedToday = 0, skippedToday = 0, failedToday = 0, lastError = null) }
+        _status.update {
+            it.copy(
+                capturedToday = 0,
+                skippedToday = 0,
+                failedToday = 0,
+                lastCaption = null,
+                lastError = null,
+            )
+        }
     }
 }
